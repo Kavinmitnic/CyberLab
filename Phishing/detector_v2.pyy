@@ -1,0 +1,136 @@
+130
+
+
+0
+cat > detector_v2.py <<'PY'
+from urllib.parse import urlsplit
+import ipaddress
+import re
+
+SUSPICIOUS_WORDS = [
+    "login", "verify", "password", "account",
+    "signin", "secure", "wallet", "update",
+    "confirm", "banking"
+]
+
+SHORTENERS = [
+    "bit.ly", "tinyurl.com", "t.co",
+    "is.gd", "cutt.ly"
+]
+
+def analyze_url(url):
+    score = 0
+    warnings = []
+
+    def flag(points, message):
+        nonlocal score
+        score += points
+        warnings.append(message)
+
+    try:
+        parsed = urlsplit(url)
+
+        if parsed.scheme not in ("http", "https"):
+            print("Invalid URL scheme.")
+            return
+
+        if not parsed.hostname:
+            print("Invalid URL: hostname missing.")
+            return
+
+        host = parsed.hostname.lower()
+        domain = host.rstrip(".")
+
+        # User information in URL
+        if parsed.username is not None or parsed.password is not None:
+            flag(3, "User information embedded in URL")
+
+        # HTTPS check
+        if parsed.scheme != "https":
+            flag(1, "HTTPS missing")
+
+        # IP address check
+        try:
+            ipaddress.ip_address(domain)
+            flag(2, "IP address used as hostname")
+        except ValueError:
+            pass
+
+        # Punycode check
+        if "xn--" in domain:
+            flag(2, "Punycode hostname detected")
+
+        # Subdomain check
+        if len(domain.split(".")) > 3:
+            flag(1, "Unusually many subdomain labels")
+
+        # URL length
+        if len(url) > 100:
+            flag(1, "Unusually long URL")
+
+        # Suspicious characters
+        if "%" in url:
+            flag(1, "Percent-encoded characters present")
+
+        if "\\" in url:
+            flag(2, "Backslash detected")
+
+        # Sensitive keywords
+        if any(word in url.lower() for word in SUSPICIOUS_WORDS):
+            flag(1, "Sensitive keywords present")
+
+        # URL shortener
+        if domain in SHORTENERS:
+            flag(1, "URL shortener hides destination")
+
+        # Display report
+        print("\n" + "=" * 38)
+        print("       PHISHGUARD v2.0 REPORT")
+        print("=" * 38)
+
+        print("Hostname:", domain)
+        print("Scheme:", parsed.scheme)
+        print("URL length:", len(url))
+        print("Risk score:", score)
+
+        if score >= 5:
+            print("Assessment: HIGHER RISK")
+        elif score >= 3:
+            print("Assessment: REVIEW CAREFULLY")
+        elif score >= 1:
+            print("Assessment: LOW-LEVEL WARNINGS")
+        else:
+            print("Assessment: NO OBVIOUS WARNINGS")
+
+        print("\nFindings:")
+
+        if warnings:
+            for item in warnings:
+                print("[!] ", item)
+        else:
+            print("[+] No configured warning detected")
+
+        print("=" * 38)
+        print("This is a heuristic assessment,")
+        print("not a guarantee of website safety.")
+
+    except ValueError:
+        print("Invalid URL.")
+
+print("PHISHGUARD v2.0")
+print("Type exit to close.")
+
+while True:
+    user_url = input("\nEnter URL: ").strip()
+
+    if user_url.lower() == "exit":
+        print("Goodbye!")
+        break
+
+    if not user_url:
+        continue
+
+    analyze_url(user_url)
+PYpython detector_v2.py
+0
+
